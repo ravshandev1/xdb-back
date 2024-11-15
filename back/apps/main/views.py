@@ -11,8 +11,9 @@ from datetime import datetime, date
 from calendar import monthrange
 from pytz import timezone
 import os
-from requests import post
+from requests import post, get
 from tasks import ENV
+import json
 
 router = APIRouter()
 
@@ -180,6 +181,7 @@ async def root(file: UploadFile = File(...)):
                 data['send_date'] = f"{row[1]} {datetime.now().astimezone(timezone('Asia/Tashkent')).strftime('%H:%M:%S')}"
                 data['ns10'] = row[7].split('/')[0]
                 data['ns11'] = row[7].split('/')[1]
+                data['name'] = row[8]
                 data['address'] = row[5]
                 data['tin'] = row[6]
                 data['count'] = row[9]
@@ -196,10 +198,8 @@ async def update_application(pk: int, data: ApplicationUpdateSchema):
     obj = await Application.get_or_none(id=pk)
     if not obj:
         return JSONResponse({"message": "Application not found"}, status_code=404)
-    if data.status:
-        obj.status = data.status
-    if data.diff_count:
-        obj.diff_count = data.diff_count
+    obj.status = data.status
+    obj.diff_count = data.diff_count
     await obj.save()
     return {"success": True}
 
@@ -209,21 +209,35 @@ async def get_application(pk: int):
     obj = await Application.get_or_none(id=pk)
     if not obj:
         return JSONResponse({"message": "Application not found"}, status_code=404)
-    data = dict()
-    data['send_id'] = obj.code
-    data['send_date'] = f"{obj.date} {datetime.now().astimezone(timezone('Asia/Tashkent')).strftime('%H:%M:%S')}"
-    data['ns10'] = obj.dsi.split('/')[0]
-    data['ns11'] = obj.dsi.split('/')[1]
-    data['address'] = obj.address
-    data['tin'] = obj.stir
-    data['count'] = obj.count
-    res = post(f"{ENV['TAX_API']}", json=data, headers={'Content-Type': 'application/json'})
-    if res.status_code >= 400:
-        obj.status = "Soliqni API si ishlamadi!"
-    # elif res.status_code >= 400:
-    #     obj.status = res.json()["text"]
+    payload = json.dumps({
+        "send_id": obj.code,
+        "send_date": f"{obj.date.strftime('%d.%m.%Y')} {datetime.now().astimezone(timezone('Asia/Tashkent')).strftime('%H:%M:%S')}",
+        "ns10": (obj.dsi.split('/')[0]).split()[0],
+        "ns11": obj.dsi.split('/')[1],
+        "address": obj.address,
+        "name": obj.subject_name,
+        "tin": obj.stir,
+        "count": obj.count,
+    })
+    token = post(f"{ENV.get('TAX_API')}/water-supply/api/authenticate/login", json={"username": "WaterSupply", "password": "Pa$$w0rd"})
+    res = post(f"{ENV['TAX_API']}/xdduk-api/xdduk-api/involved-businessman", data=payload, headers={'Content-Type': 'application/json', 'Authorization': f'Bearer {token.text}'})
+    if res.status_code >= 500:
+        status = "Soliqni API si ishlamadi!"
+    elif res.status_code >= 400:
+        status = res.json()["text"]
     else:
-        obj.status = "Muvofiqiyatli"
+        status = "Muvofiqiyatli"
+    res = get(f"{ENV.get('TAX_API')}/water-supply/api/water-supply/get-gravel-info",
+              headers={'Content-Type': 'application/json', 'Authorization': f'Bearer {token.text}'},
+              params={"tin": obj.stir, "periodYear": obj.date.strftime('%Y'), "periodMonth": obj.date.strftime('%m')})
+    if res.status_code >= 500:
+        diff_count = "Soliqni API si ishlamadi!"
+    elif res.status_code >= 400:
+        diff_count = res.json()["text"]
+    else:
+        diff_count = res.json()['data']['count'] if res.json()['data']['count'] else "Malumot olishda xatolik"
+    obj.status = status
+    obj.diff_count = diff_count
     await obj.save()
     return {"success": True}
 
