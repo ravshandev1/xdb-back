@@ -7,7 +7,7 @@ from utils import get_jwt_token, hashed_password, verify_password, JWTAuth, pagi
 from tasks import send_data_to_tax_task
 from openpyxl import load_workbook
 from io import BytesIO
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from calendar import monthrange
 from pytz import timezone
 import os
@@ -99,7 +99,7 @@ async def update_user(pk: int, data: UserUpdateSchema):
 async def get_applications_by_month(year: int, month: int):
     try:
         applications = await Application.filter(date__range=[date(year, month, 1),
-                                                             date(year, month, monthrange(year, month)[1])]).all()
+                                                             date(year, month, monthrange(year, month)[1])]).order_by('-id')
         if not applications:
             raise HTTPException(status_code=404, detail="Applications not found")
         file_path = 'template.xlsx'
@@ -170,27 +170,28 @@ async def root(file: UploadFile = File(...)):
         for row in sheet.iter_rows(min_row=2, values_only=True):
             data = dict()
             dt = date(int(row[1].split('.')[2]), int(row[1].split('.')[1]), int(row[1].split('.')[0]))
-            if await Application.filter(date=dt, stir=row[6], dsi=row[7]).exists():
-                await Application.create(code=row[0], date=dt, area=row[2], river=row[3], plot=row[4], address=row[5],
-                                         stir=row[6], dsi=row[7], subject_name=row[8], count=row[9],
-                                         status="Takrorlangan")
-            else:
-                app = await Application.create(code=row[0], date=dt, area=row[2], river=row[3], plot=row[4], dsi=row[7],
-                                               address=row[5], stir=row[6], subject_name=row[8], count=row[9])
-                data['send_id'] = row[0]
-                data['send_date'] = f"{row[1]} {datetime.now().astimezone(timezone('Asia/Tashkent')).strftime('%H:%M:%S')}"
-                data['ns10'] = row[7].split('/')[0]
-                data['ns11'] = row[7].split('/')[1]
-                data['name'] = row[8]
-                data['address'] = row[5]
-                data['tin'] = row[6]
-                data['count'] = row[9]
-                ls.append(data)
-                ids.append({"id": app.id, "year": dt.year, "month": dt.month})
+            # if await Application.filter(date=dt, stir=row[6], dsi=row[7]).exists():
+            #     await Application.create(code=row[0], date=dt, area=row[2], river=row[3], plot=row[4], address=row[5],
+            #                              stir=row[6], dsi=row[7], subject_name=row[8], count=row[9],
+            #                              status="Takrorlangan")
+            # else:
+            app = await Application.create(code=row[0], date=dt, area=row[2], river=row[3], plot=row[4], dsi=row[7],
+                                           address=row[5], stir=row[6], subject_name=row[8], count=row[9])
+            data['send_id'] = row[0]
+            data['send_date'] = f"{row[1]} {datetime.now().astimezone(timezone('Asia/Tashkent')).strftime('%H:%M:%S')}"
+            data['ns10'] = row[7].split('/')[0]
+            data['ns11'] = row[7].split('/')[1]
+            data['name'] = row[8]
+            data['address'] = row[5]
+            data['tin'] = row[6]
+            data['count'] = row[9]
+            ls.append(data)
+            ids.append({"id": app.id, "year": dt.year, "month": dt.month})
         send_data_to_tax_task.delay(ls, ids)
+        get_data_from_tax_task.apply_async(args=[ids], eta=datetime.now() + timedelta(weeks=1))
+        return {"success": True}
     except Exception as e:
-        print(e)
-    return {'success': True}
+        return {"success": True, "message": str(e)}
 
 
 @router.patch("/application/{pk}")
@@ -235,7 +236,7 @@ async def get_application(pk: int):
     elif res.status_code >= 400:
         diff_count = res.json()["text"]
     else:
-        diff_count = res.json()['data']['count'] if res.json()['data']['count'] else "Malumot olishda xatolik"
+        diff_count = res.json()['data']['count'] if res.json()['data'] else "Malumot olishda xatolik"
     obj.status = status
     obj.diff_count = diff_count
     await obj.save()
