@@ -188,7 +188,7 @@ async def root(file: UploadFile = File(...)):
             ls.append(data)
             ids.append({"id": app.id, "year": dt.year, "month": dt.month})
         send_data_to_tax_task.delay(ls, ids)
-        get_data_from_tax_task.apply_async(args=[ids], eta=datetime.now() + timedelta(weeks=1))
+        get_data_from_tax_task.apply_async(args=[ls, ids], eta=datetime.now() + timedelta(weeks=1))
         return {"success": True}
     except Exception as e:
         return {"success": True, "message": str(e)}
