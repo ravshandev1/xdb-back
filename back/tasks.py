@@ -13,9 +13,9 @@ app.autodiscover_tasks()
 
 
 @shared_task
-def send_data_to_tax_task(ls: list[dict]):
+def send_data_to_tax_task(ls: list[dict], , ids: list[dict]):
     token = post(f"{ENV.get('TAX_API')}/water-supply/api/authenticate/login", json={"username": "WaterSupply", "password": "Pa$$w0rd"})
-    for i in ls:
+    for i, j in zip(ls, ids):
         res = post(f"{ENV['TAX_API']}/xdduk-api/xdduk-api/involved-businessman", json=i,
                    headers={'Content-Type': 'application/json', 'Authorization': f'Bearer {token.text}'})
         if res.status_code >= 500:
@@ -24,6 +24,7 @@ def send_data_to_tax_task(ls: list[dict]):
             status = res.json()["text"]
         else:
             status = "Muvofiqiyatli"
+        res = patch(f"{ENV.get('BASE_URL')}/application/{j['id']}", data={"status": status, "diff_count": diff_count})
     return "Got the response"
 @shared_task
 def get_data_from_tax_task(ls: list[dict], ids: list[dict]):
