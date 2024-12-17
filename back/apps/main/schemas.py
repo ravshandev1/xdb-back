@@ -64,11 +64,9 @@ class ApplicationSchema(BaseModel):
 
     @classmethod
     def to_dict(cls, item):
-        try:
+        different = item.diff_count
+        if type(item.diff_count) == int:
             different = item.count - int(item.diff_count)
-        except Exception as e:
-            print(e)
-            different = "Soliqdan hali farqi olinmagan!"
         return {
             "id": item.id,
             "code": item.code,
