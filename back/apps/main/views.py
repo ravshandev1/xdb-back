@@ -4,7 +4,7 @@ from .schemas import RegisterSchema, ChangePasswordSchema, LoginSchema, UserSche
     ApplicationUpdateSchema, UserUpdateSchema, ApplicationPeriodQuery
 from .models import User, Application
 from utils import get_jwt_token, hashed_password, verify_password, JWTAuth, paginate
-from tasks import send_data_to_tax_task
+from tasks import send_data_to_tax_task, get_data_from_tax_task
 from openpyxl import load_workbook
 from io import BytesIO
 from datetime import datetime, date, timedelta
