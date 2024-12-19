@@ -39,5 +39,5 @@ def get_data_from_tax_task(ls: list[dict], ids: list[dict]):
             diff_count = res.json()["text"]
         else:
             diff_count = res.json()['data']['count'] if res.json()['data'] else "Malumot olishda xatolik"
-        res = patch(f"{ENV.get('BASE_URL')}/application/{j['id']}", data={"status": status, "diff_count": diff_count})
+        res = patch(f"{ENV.get('BASE_URL')}/application/{j['id']}", json={"status": status, "diff_count": str(diff_count)})
     return "Got the response"
