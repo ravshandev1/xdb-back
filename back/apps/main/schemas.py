@@ -64,6 +64,7 @@ class ApplicationSchema(BaseModel):
 
     @classmethod
     def to_dict(cls, item):
+        different = item.diff_count
         if isinstance(item.diff_count. str):
             try:
                 different = item.count - int(item.diff_count)
@@ -71,7 +72,7 @@ class ApplicationSchema(BaseModel):
                 try:
                     different = float(item.count) - float(item.diff_count)
                 except ValueError:
-                    different = item.diff_count
+                    pass
         return {
             "id": item.id,
             "code": item.code,
