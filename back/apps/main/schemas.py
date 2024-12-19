@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+2from pydantic import BaseModel
 from datetime import datetime, date
 from typing import Optional
 
@@ -64,9 +64,14 @@ class ApplicationSchema(BaseModel):
 
     @classmethod
     def to_dict(cls, item):
-        different = item.diff_count
-        if type(item.diff_count) == int:
-            different = item.count - int(item.diff_count)
+        if isinstance(item.diff_count. str):
+            try:
+                different = item.count - int(item.diff_count)
+            except ValueError:
+                try:
+                    different = float(item.count) - float(item.diff_count)
+                except ValueError:
+                    different = item.diff_count
         return {
             "id": item.id,
             "code": item.code,
