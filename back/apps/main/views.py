@@ -107,6 +107,15 @@ async def get_applications_by_month(year: int, month: int):
         ws = wb.active
         current_row = 2
         for app in applications:
+            different = app.diff_count
+            if isinstance(app.diff_count. str):
+                try:
+                    different = app.count - int(app.diff_count)
+                except ValueError:
+                    try:
+                        different = float(app.count) - float(app.diff_count)
+                    except ValueError:
+                        pass
             row_data = [
                 str(app.code),
                 str(app.date),
@@ -119,6 +128,7 @@ async def get_applications_by_month(year: int, month: int):
                 str(app.subject_name),
                 str(app.count),
                 str(app.diff_count),
+                str(different),
                 str(app.status)
             ]
             for col, value in enumerate(row_data, start=1):
