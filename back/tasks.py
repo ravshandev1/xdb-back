@@ -13,7 +13,7 @@ app.autodiscover_tasks()
 
 
 @shared_task
-def send_data_to_tax_task(ls: list[dict], , ids: list[dict]):
+def send_data_to_tax_task(ls: list[dict], ids: list[dict]):
     token = post(f"{ENV.get('TAX_API')}/water-supply/api/authenticate/login", json={"username": "WaterSupply", "password": "Pa$$w0rd"})
     for i, j in zip(ls, ids):
         res = post(f"{ENV['TAX_API']}/xdduk-api/xdduk-api/involved-businessman", json=i,
