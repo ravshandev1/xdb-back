@@ -65,7 +65,7 @@ class ApplicationSchema(BaseModel):
     @classmethod
     def to_dict(cls, item):
         different = item.diff_count
-        if isinstance(item.diff_count. str):
+        if isinstance(item.diff_count, str):
             try:
                 different = item.count - int(item.diff_count)
             except ValueError:
