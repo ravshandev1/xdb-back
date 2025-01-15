@@ -9,6 +9,6 @@ ENV NEXT_PUBLIC_META_DESCRIPTION=LoremENV
 ENV NEXT_PUBLIC_META_IMAGE=https://cheeff.uz/images/logo.png
 ENV NEXT_PUBLIC_META_KEYWORDS=XDB
 ENV NEXT_PUBLIC_API_URL=http://localhost:8000
+RUN npm run build
 EXPOSE 3000
-CMD ["npm", "run", "dev"]
-
+CMD ["npm", "start"]

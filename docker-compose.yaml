@@ -1,9 +1,8 @@
-version: "3"
 services:
   front:
     build:
       context: front/
-    container_name: xdb_front
+    container_name: front
     restart: unless-stopped
     depends_on:
       - fastapi
@@ -12,20 +11,20 @@ services:
   fastapi:
     build:
       context: back/
-    container_name: xdb_fastapi
+    container_name: fastapi
     restart: unless-stopped
     ports:
       - "8000:8000"
   redis:
     image: redis:alpine
-    container_name: xdb_redis
+    container_name: redis
     restart: unless-stopped
   celery:
     build:
       dockerfile: celery-dockerfile
       context: back/
     restart: unless-stopped
-    container_name: xdb_celery
+    container_name: celery
     depends_on:
       - fastapi
       - redis

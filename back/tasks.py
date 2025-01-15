@@ -4,8 +4,8 @@ from requests import post, patch, get
 
 ENV = dotenv_values(".env")
 app = Celery(__name__)
-app.conf.broker_url = f"redis://xdb_redis:6379/0"
-app.conf.result_backend = f"redis://xdb_redis:6379/0"
+app.conf.broker_url = f"redis://redis:6379/0"
+app.conf.result_backend = f"redis://redis:6379/0"
 app.conf.broker_connection_retry_on_startup = True
 app.conf.enable_utc = False
 app.conf.update(timezone='Asia/Tashkent')
