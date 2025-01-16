@@ -108,7 +108,7 @@ async def get_applications_by_month(year: int, month: int):
         current_row = 2
         for app in applications:
             different = app.diff_count
-            if isinstance(app.diff_count. str):
+            if isinstance(app.diff_count, str):
                 try:
                     different = app.count - int(app.diff_count)
                 except ValueError:
