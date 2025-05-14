@@ -93,8 +93,8 @@ class ApplicationSchema(BaseModel):
 
 
 class ApplicationUpdateSchema(BaseModel):
-    status: str
-    diff_count: str
+    status: Optional[str] = None
+    diff_count: Optional[str] = None
 
 
 class ApplicationPeriodQuery(BaseModel):

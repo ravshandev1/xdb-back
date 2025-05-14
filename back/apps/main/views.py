@@ -4,10 +4,10 @@ from .schemas import RegisterSchema, ChangePasswordSchema, LoginSchema, UserSche
     ApplicationUpdateSchema, UserUpdateSchema, ApplicationPeriodQuery
 from .models import User, Application
 from utils import get_jwt_token, hashed_password, verify_password, JWTAuth, paginate
-from tasks import send_data_to_tax_task, get_data_from_tax_task
+from tasks import get_data_from_tax_task
 from openpyxl import load_workbook
 from io import BytesIO
-from datetime import datetime, date, timedelta
+from datetime import datetime, timedelta, date
 from calendar import monthrange
 from pytz import timezone
 import os
@@ -97,6 +97,7 @@ async def update_user(pk: int, data: UserUpdateSchema):
 
 @router.get("/applications/{year}/{month}")
 async def get_applications_by_month(year: int, month: int):
+    token = post(f"{ENV.get('TAX_API')}/water-supply/api/authenticate/login", json={"username": "WaterSupply", "password": "Pa$$w0rd"})
     try:
         applications = await Application.filter(date__range=[date(year, month, 1),
                                                              date(year, month, monthrange(year, month)[1])]).order_by('-id')
@@ -107,7 +108,18 @@ async def get_applications_by_month(year: int, month: int):
         ws = wb.active
         current_row = 2
         for app in applications:
-            different = app.diff_count
+            res = get(f"{ENV.get('TAX_API')}/water-supply/api/water-supply/get-gravel-info",
+              headers={'Content-Type': 'application/json', 'Authorization': f'Bearer {token.text}'},
+              params={"tin": app.stir, "periodYear": app.date.strftime('%Y'), "periodMonth": app.date.strftime('%m')})
+            if res.status_code >= 500:
+                diff_count = "Soliqni API si ishlamadi!"
+            elif res.status_code >= 400:
+                diff_count = res.json()["text"]
+            else:
+                diff_count = res.json()['data']['count'] if res.json()['data'] else "Malumot olishda xatolik"
+            app.diff_count = diff_count
+            await app.save(update_fields["diff_count"])
+            different = diff_count
             if isinstance(app.diff_count, str):
                 try:
                     different = app.count - int(app.diff_count)
@@ -168,6 +180,7 @@ async def get_applications(request: Request, query: ApplicationPeriodQuery = Dep
 
 @router.post("/applications", dependencies=[Depends(JWTAuth())])
 async def root(file: UploadFile = File(...)):
+    token = post(f"{ENV.get('TAX_API')}/water-supply/api/authenticate/login", json={"username": "WaterSupply", "password": "Pa$$w0rd"})
     if file.content_type != 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':
         return JSONResponse({"success": False, "message": "Invalid file type. Please upload an Excel file."},
                                       status_code=400)
@@ -178,43 +191,37 @@ async def root(file: UploadFile = File(...)):
     ids = list()
     try:
         for row in sheet.iter_rows(min_row=3, values_only=True):
+            if row[0] is None:
+                break
             data = dict()
-            dt = date(int(row[1].split('.')[2]), int(row[1].split('.')[1]), int(row[1].split('.')[0]))
-            # if await Application.filter(date=dt, stir=row[6], dsi=row[7]).exists():
-            #     await Application.create(code=row[0], date=dt, area=row[2], river=row[3], plot=row[4], address=row[5],
-            #                              stir=row[6], dsi=row[7], subject_name=row[8], count=row[9],
-            #                              status="Takrorlangan")
-            # else:
-            app = await Application.create(code=row[0], date=dt, area=row[2], river=row[3], plot=row[4], dsi=row[7],
-                                           address=row[5], stir=row[6], subject_name=row[8], count=row[9])
+            status = "Muvofiqiyatli"
+            dt = datetime.strptime(row[1], "%d.%m.%Y")
             data['send_id'] = row[0]
-            data['send_date'] = f"{row[1]} {datetime.now().astimezone(timezone('Asia/Tashkent')).strftime('%H:%M:%S')}"
+            data['send_date'] = dt
             data['ns10'] = int(row[7].split('/')[0])
             data['ns11'] = int(row[7].split('/')[1])
             data['name'] = row[8]
             data['address'] = row[5]
             data['tin'] = row[6]
             data['count'] = row[9]
+            res = post(f"{ENV['TAX_API']}/xdduk-api/xdduk-api/involved-businessman", json=json.dumps(data), headers={'Content-Type': 'application/json', 'Authorization': f'Bearer {token.text}'})
+            if 400 <= res.status_code < 500:
+                status = res.json()["text"]
+            data['status'] = status
+            data['area'] = row[2]
+            data['river'] = row[3]
+            data['plot'] = row[4]
+            data['dsi'] = row[7]
             ls.append(data)
-            ids.append({"id": app.id, "year": dt.year, "month": dt.month})
-        send_data_to_tax_task.delay(ls, ids)
-        get_data_from_tax_task.apply_async(args=[ls, ids], eta=datetime.now() + timedelta(weeks=1))
+        for i in ls:
+            app = await Application.create(code=i['send_id'], date=i['send_date'], area=i['area'], river=i['river'], plot=i['plot'], dsi=i['dsi'],
+                                           address=i['address'], stir=i['tin'], subject_name=i['name'], count=i[['count']], status=i['status'])
+            ids.append({"id": app.id, "year": dt.date().year, "month": dt.date().month, "tin": i["tin"]})
+        get_data_from_tax_task.apply_async(args=[ids], eta=datetime.now() + timedelta(weeks=1))
         return {"success": True}
     except Exception as e:
-        return {"success": True, "message": str(e)}
-
-
-@router.patch("/application/{pk}")
-async def update_application(pk: int, data: ApplicationUpdateSchema):
-    obj = await Application.get_or_none(id=pk)
-    if not obj:
-        return JSONResponse({"message": "Application not found"}, status_code=404)
-    obj.status = data.status
-    obj.diff_count = data.diff_count
-    await obj.save()
-    return {"success": True}
-
-
+        return {"success": False, "message": str(e)}
+    
 @router.get("/application/{pk}")
 async def get_application(pk: int):
     obj = await Application.get_or_none(id=pk)
@@ -223,7 +230,7 @@ async def get_application(pk: int):
     payload = json.dumps({
         "send_id": obj.code,
         "send_date": f"{obj.date.strftime('%d.%m.%Y')} {datetime.now().astimezone(timezone('Asia/Tashkent')).strftime('%H:%M:%S')}",
-        "ns10": (obj.dsi.split('/')[0]).split()[0],
+        "ns10": int(obj.dsi.split('/')[0]),
         "ns11": obj.dsi.split('/')[1],
         "address": obj.address,
         "name": obj.subject_name,
@@ -249,6 +256,15 @@ async def get_application(pk: int):
         diff_count = res.json()['data']['count'] if res.json()['data'] else "Malumot olishda xatolik"
     obj.status = status
     obj.diff_count = diff_count
+    await obj.save()
+    return {"success": True}
+
+@router.patch("/application/{pk}")
+async def update_application(pk: int, data: ApplicationUpdateSchema):
+    obj = await Application.get_or_none(id=pk)
+    if not obj:
+        return JSONResponse({"message": "Application not found"}, status_code=404)
+    await obj.update_from_dict(data.model_dump(exclude_none=True))
     await obj.save()
     return {"success": True}
 
